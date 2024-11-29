@@ -1,0 +1,50 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+model*/
+tests*/
+# Log files
+logs/
+*.log
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# SpeechBrain specific
+pretrained_models/
+results/
+save/
+lightning_logs/
+*.pt
+*.ckpt
+
+# Misc
+.DS_Store
+.env
+.env.local
+.env.*.local

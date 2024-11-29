@@ -1,0 +1,17 @@
+numpy>=1.24.0
+torch>=2.0.0
+torchaudio>=2.0.0
+transformers[sentencepiece]>=4.30.0
+soundfile>=0.12.1
+pyaudio>=0.2.13
+accelerate>=0.20.0
+datasets>=2.12.0
+jiwer>=3.0.1
+pyctcdecode>=0.5.0
+kenlm>=0.1.0
+librosa>=0.10.0
+scipy>=1.10.0
+noisereduce>=2.0.1
+webrtcvad>=2.0.10
+psutil>=5.9.0  # For memory detection
+colorama>=0.4.6
