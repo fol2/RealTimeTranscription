@@ -36,171 +36,90 @@ from colorama import Fore, Style
 colorama.init()
 
 class ColoredFormatter(logging.Formatter):
-    """Enhanced custom formatter with better visual hierarchy"""
-    
+    """Simplified formatter for system messages"""
     COLORS = {
-        'DEBUG': Fore.CYAN,
-        'INFO': Fore.GREEN,
         'WARNING': Fore.YELLOW,
         'ERROR': Fore.RED,
         'CRITICAL': Fore.RED + Style.BRIGHT,
     }
     
-    CATEGORIES = {
-        'transcription': f"{Fore.BLUE}█{Style.RESET_ALL}",
-        'model': f"{Fore.MAGENTA}◆{Style.RESET_ALL}",
-        'system': f"{Fore.GREEN}●{Style.RESET_ALL}",
-        'error': f"{Fore.RED}✖{Style.RESET_ALL}",
-    }
-    
     def format(self, record):
-        # Add color to level name if it's a terminal
         if record.levelname in self.COLORS and hasattr(sys.stdout, 'isatty') and sys.stdout.isatty():
-            record.levelname = f"{self.COLORS[record.levelname]}{record.levelname:8}{Style.RESET_ALL}"
-        
-        # Format based on message type
-        msg = record.msg
-        if 'transcription' in msg.lower():
-            # Format transcription with box
-            text = msg.split(':', 1)[1].strip()
-            record.msg = (
-                f"\n{self.CATEGORIES['transcription']} Transcription "
-                f"{Fore.BLUE}{'─' * 60}{Style.RESET_ALL}\n"
-                f"  {text}\n"
-                f"{Fore.BLUE}{'─' * 72}{Style.RESET_ALL}\n"
-            )
-        elif 'error' in msg.lower():
-            # Format errors with clear marker
-            record.msg = f"{self.CATEGORIES['error']} {msg}"
-        elif any(word in msg.lower() for word in ['model', 'loading', 'initialized']):
-            # Format model-related messages
-            record.msg = f"{self.CATEGORIES['model']} {msg}"
-        else:
-            # Format system messages
-            record.msg = f"{self.CATEGORIES['system']} {msg}"
-        
-        return super().format(record)
+            return f"{self.COLORS[record.levelname]}{record.msg}{Style.RESET_ALL}"
+        return record.msg
 
 class TranscriptionFormatter(logging.Formatter):
-    """Dedicated formatter for transcription output"""
+    """Minimal formatter showing only transcribed text"""
     def format(self, record):
-        # Format transcription with timestamp and clean styling
-        timestamp = datetime.now().strftime('%H:%M:%S')
-        text = record.msg
-        
         if hasattr(sys.stdout, 'isatty') and sys.stdout.isatty():
-            return (
-                f"\n{Fore.BLUE}[{timestamp}] Transcription {Style.RESET_ALL}\n"
-                f"{Fore.BLUE}{'─' * 72}{Style.RESET_ALL}\n"
-                f"  {text}\n"
-                f"{Fore.BLUE}{'─' * 72}{Style.RESET_ALL}\n"
-            )
-        else:
-            return f"[{timestamp}] {text}"
+            return f"{Fore.BLUE}▶ {Style.RESET_ALL}{record.msg}"
+        return record.msg
 
 class TranscriptionFileFormatter(logging.Formatter):
-    """Formatter for transcription log files with JSON support"""
-    def __init__(self, use_json=False):
-        super().__init__()
-        self.use_json = use_json
-        
+    """Clean formatter for log files"""
     def format(self, record):
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        if self.use_json:
-            # JSON format for easy parsing
-            data = {
-                'timestamp': timestamp,
-                'text': record.msg,
-                'session_id': getattr(record, 'session_id', ''),
-                'confidence': getattr(record, 'confidence', None)
-            }
-            return json.dumps(data)
-        else:
-            # Human-readable format
-            return f"[{timestamp}] {record.msg}"
+        return f"[{timestamp}] {record.msg}"
 
 def setup_logging():
-    """Configure enhanced logging system with improved file output"""
-    # Create logs directory if it doesn't exist
+    """Configure minimal logging system focused on transcriptions"""
+    # Create logs directory
     if not os.path.exists('logs'):
         os.makedirs('logs')
     
-    # Generate session ID and log filenames
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     session_id = f"session_{timestamp}"
     
-    system_log_file = f"logs/system_{timestamp}.log"
-    transcription_log_file = f"logs/transcription_{timestamp}.log"
-    transcription_json_file = f"logs/transcription_{timestamp}.jsonl"
+    # Configure root logger to WARNING to suppress most logs
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.WARNING)
+    root_logger.handlers = []
     
-    # Setup system logger (unchanged)
+    # Console handler for system messages (WARNING and above only)
     console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.WARNING)
+    console_handler.setFormatter(ColoredFormatter(
+        '%(levelname)s: %(message)s'
+    ))
+    root_logger.addHandler(console_handler)
+    
+    # File handler for system logs (all levels for debugging)
     system_file_handler = RotatingFileHandler(
-        system_log_file,
+        f"logs/system_{timestamp}.log",
         maxBytes=10*1024*1024,
         backupCount=5
     )
-    
-    console_formatter = ColoredFormatter(
-        '%(asctime)s %(levelname)s %(message)s',
-        datefmt='%H:%M:%S'
-    )
-    file_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)-8s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    
-    console_handler.setFormatter(console_formatter)
-    system_file_handler.setFormatter(file_formatter)
-    
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    root_logger.handlers = []
-    root_logger.addHandler(console_handler)
+    system_file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s'
+    ))
     root_logger.addHandler(system_file_handler)
     
-    # Setup transcription logger with multiple outputs
+    # Configure transcription logger (only shows transcriptions)
     transcription_logger = logging.getLogger('transcription')
     transcription_logger.setLevel(logging.INFO)
     transcription_logger.propagate = False
     
-    # Console handler (unchanged)
+    # Console handler for transcriptions with clean format
     trans_console_handler = logging.StreamHandler()
     trans_console_handler.setFormatter(TranscriptionFormatter())
-    
-    # Human-readable file handler
-    trans_file_handler = RotatingFileHandler(
-        transcription_log_file,
-        maxBytes=10*1024*1024,
-        backupCount=5
-    )
-    trans_file_handler.setFormatter(TranscriptionFileFormatter(use_json=False))
-    
-    # JSON file handler for machine processing
-    trans_json_handler = RotatingFileHandler(
-        transcription_json_file,
-        maxBytes=10*1024*1024,
-        backupCount=5
-    )
-    trans_json_handler.setFormatter(TranscriptionFileFormatter(use_json=True))
-    
     transcription_logger.addHandler(trans_console_handler)
-    transcription_logger.addHandler(trans_file_handler)
-    transcription_logger.addHandler(trans_json_handler)
     
-    # Store session info
-    with open(f"logs/session_{timestamp}_info.json", 'w') as f:
-        json.dump({
-            'session_id': session_id,
-            'timestamp': timestamp,
-            'files': {
-                'system_log': os.path.abspath(system_log_file),
-                'transcription_log': os.path.abspath(transcription_log_file),
-                'transcription_json': os.path.abspath(transcription_json_file)
-            }
-        }, f, indent=2)
+    # File handler for transcriptions
+    trans_file_handler = RotatingFileHandler(
+        f"logs/transcription_{timestamp}.log",
+        maxBytes=10*1024*1024,
+        backupCount=5
+    )
+    trans_file_handler.setFormatter(TranscriptionFileFormatter())
+    transcription_logger.addHandler(trans_file_handler)
+    
+    # Aggressively suppress third-party logging
+    for logger_name in ['transformers', 'torch', 'numpy', 'PIL', 'urllib3', 'requests']:
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+    
+    # Only show startup info
+    logger = logging.getLogger(__name__)
+    logger.info("Transcription system initialized")
     
     return session_id
 
@@ -911,36 +830,35 @@ class TranscriptionPipeline:
         return final_text if final_text else None
         
     def _transcription_worker(self):
-        """Worker thread for ASR processing with enhanced logging"""
+        """Worker thread with minimal logging"""
         while self.running:
             try:
                 chunks = self.audio_buffer.get_chunks()
-                if chunks:
-                    logger.debug(f"Processing {len(chunks)} audio chunks")
                 
                 for chunk in chunks:
                     if chunk.is_speech:
                         try:
+                            # Calculate audio level
+                            audio_level = np.abs(chunk.data).mean()
+                            
                             if self.is_whisper:
-                                # Normalize audio to prevent low levels
+                                # Normalize audio
                                 audio_data = chunk.data
                                 if np.abs(audio_data).max() > 0:
                                     audio_data = audio_data / np.abs(audio_data).max()
                                 
-                                # Process audio for Whisper with proper attention mask
+                                # Process audio for Whisper
                                 inputs = self.processor(
                                     audio_data,
                                     sampling_rate=16000,
                                     return_tensors="pt",
-                                    return_attention_mask=True  # Explicitly request attention mask
+                                    return_attention_mask=True
                                 )
                                 
-                                # Move all inputs to device
                                 input_features = inputs.input_features.to(self.config["device"])
                                 attention_mask = inputs.attention_mask.to(self.config["device"]) if hasattr(inputs, 'attention_mask') else None
                                 
                                 with torch.no_grad():
-                                    # Generate without explicit task setting to avoid conflicts
                                     generated_ids = self.model.generate(
                                         input_features,
                                         attention_mask=attention_mask,
@@ -948,9 +866,9 @@ class TranscriptionPipeline:
                                         max_length=448,
                                         suppress_tokens=[1],
                                         return_timestamps=False,
-                                        task="transcribe",  # Explicitly set task
-                                        language="en",      # Force English
-                                        no_repeat_ngram_size=3  # Reduce repetition
+                                        task="transcribe",
+                                        language="en",
+                                        no_repeat_ngram_size=3
                                     )
                                     
                                     transcription = self.processor.batch_decode(
@@ -958,11 +876,9 @@ class TranscriptionPipeline:
                                         skip_special_tokens=True,
                                         clean_up_tokenization_spaces=True
                                     )
-                                    
-                                    # Whisper provides high-quality transcriptions by default
                                     confidence = 0.95
                             else:
-                                # Existing Wav2Vec2 processing
+                                # Wav2Vec2 processing
                                 inputs = self.processor(
                                     chunk.data,
                                     sampling_rate=16000,
@@ -976,6 +892,7 @@ class TranscriptionPipeline:
                                     transcription = self.processor.batch_decode(predicted_ids)
                                     confidence = torch.max(torch.softmax(logits, dim=-1)).item()
                             
+                            # Now transcription is defined, process it
                             if transcription and transcription[0].strip():
                                 text = transcription[0].strip()
                                 if self.is_whisper:
@@ -983,7 +900,7 @@ class TranscriptionPipeline:
                                     text = re.sub(r'\(.*?\)', '', text)
                                     text = re.sub(r'\s+', ' ', text).strip()
                                 
-                                # Create log record with extra info
+                                # Only log final transcription
                                 record = logging.LogRecord(
                                     name='transcription',
                                     level=logging.INFO,
@@ -993,13 +910,9 @@ class TranscriptionPipeline:
                                     args=(),
                                     exc_info=None
                                 )
-                                record.confidence = confidence
+                                record.audio_level = audio_level
                                 
-                                # Log with enhanced information
                                 transcription_logger.handle(record)
-                                
-                                # Debug log
-                                logger.debug(f"Raw transcription: {text}")
                                 
                                 self.transcription_queue.put(
                                     TranscriptionResult(
@@ -1010,54 +923,45 @@ class TranscriptionPipeline:
                                 )
                                 
                         except Exception as e:
-                            logger.error(f"Error processing chunk: {e}")
-                            if logger.isEnabledFor(logging.DEBUG):
-                                logger.exception("Full traceback:")
+                            logger.error(f"Transcription error: {str(e)}")
+                            logger.exception("Full traceback:")  # Add full traceback for debugging
                 
-                # Clear processed chunks
                 self.audio_buffer.clear_processed_chunks()
                 
             except Exception as e:
-                logger.error(f"Error in transcription worker: {e}")
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.exception("Full traceback:")
-                
+                logger.error(f"Worker error: {str(e)}")
+                logger.exception("Full traceback:")
+            
             time.sleep(0.01)
             
     def _text_processing_worker(self):
-        """Worker thread for text processing with improved accumulation"""
+        """Worker thread for text processing with minimal logging"""
         text_buffer = []
         last_output_time = time.time()
-        buffer_time = 2.0  # Accumulate for 2 seconds
-        min_buffer_size = 5  # Minimum number of transcriptions to process
+        buffer_time = 2.0
+        min_buffer_size = 5
         
         while self.running:
             try:
-                # Get new transcription with longer timeout
                 try:
                     result = self.transcription_queue.get(timeout=0.1)
-                    logger.debug(f"Added to buffer: {result.text}")
                     text_buffer.append(result)
                 except queue.Empty:
-                    # Process buffer if we've waited long enough without new input
                     current_time = time.time()
                     if text_buffer and (current_time - last_output_time) > buffer_time:
-                        logger.debug("Processing buffer due to timeout")
                         self._process_buffer(text_buffer)
                         text_buffer = []
                         last_output_time = current_time
                     continue
                 
-                # Process buffer if we have enough transcriptions or enough time has passed
                 current_time = time.time()
                 if len(text_buffer) >= min_buffer_size or (current_time - last_output_time) > buffer_time:
-                    logger.debug(f"Processing buffer with {len(text_buffer)} items")
                     self._process_buffer(text_buffer)
                     text_buffer = []
                     last_output_time = current_time
                     
             except Exception as e:
-                logger.error(f"Error in text processing worker: {e}")
+                logger.error(f"Error in text processing: {e}")
                 logger.exception("Full traceback:")
                 text_buffer = []
                 
@@ -1091,7 +995,10 @@ class TranscriptionPipeline:
             combined_text = self._clean_and_combine_text(group)
             
             if combined_text:
-                logger.info(f"Combined text from {len(group)} transcriptions: {combined_text}")
+                # Only log to file, not console
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                with open(f"logs/transcription_{self.session_id}.log", 'a') as f:
+                    f.write(f"[{timestamp}] {combined_text}\n")
                 
                 # Calculate average confidence
                 avg_confidence = sum(r.confidence for r in group) / len(group)
@@ -1105,7 +1012,6 @@ class TranscriptionPipeline:
                             confidence=avg_confidence
                         )
                     )
-                    logger.debug("Added to output queue")
 
 class Transcriber:
     """Wrapper class for backwards compatibility with existing code"""

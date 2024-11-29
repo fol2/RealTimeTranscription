@@ -11,15 +11,14 @@ logger = logging.getLogger(__name__)
 class AudioStream:
     def __init__(self, sample_rate=48000, channels=2, chunk_size=4000):
         """Initialize audio stream with BlackHole's native settings."""
-        self.sample_rate = sample_rate  # BlackHole's native rate
-        self.channels = channels        # Stereo
+        self.sample_rate = sample_rate
+        self.channels = channels
         self.chunk_size = chunk_size
         self.audio_queue = queue.Queue()
         self.is_running = False
         self._stream = None
         self._audio = None
         self._stream_thread = None
-        self.debug_counter = 0
         self.audio_detected = False
         
     def _find_blackhole(self) -> Tuple[int, dict]:
@@ -92,20 +91,16 @@ class AudioStream:
             # Convert bytes to numpy array (32-bit float)
             audio_data = np.frombuffer(in_data, dtype=np.float32)
             
-            # Check audio levels periodically
-            self.debug_counter += 1
-            if self.debug_counter % 10 == 0:
-                level = np.abs(audio_data).mean()
-                bars = int(50 * level)
-                print(f"Audio Level: {'=' * bars}{' ' * (50 - bars)} [{level:.4f}]")
-                
-                # Update audio detection status
-                if level > 0.01:  # Adjust threshold as needed
-                    if not self.audio_detected:
-                        print("\n✓ Audio input detected!")
-                        self.audio_detected = True
-                else:
-                    self.audio_detected = False
+            # Check audio levels but only show initial detection
+            level = np.abs(audio_data).mean()
+            if level > 0.01 and not self.audio_detected:
+                # Only show detection message once at startup
+                if not hasattr(self, '_shown_detection'):
+                    print("\n✓ Audio input detected!")
+                    self._shown_detection = True
+                self.audio_detected = True
+            elif level <= 0.01:
+                self.audio_detected = False
             
             # Put the audio data in the queue
             self.audio_queue.put(audio_data)
