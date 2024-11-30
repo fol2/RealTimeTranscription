@@ -32,6 +32,7 @@ def main():
         audio_stream.start()
         
         # Main processing loop
+        current_line = ''
         while True:
             # Get audio chunk
             audio_chunk = audio_stream.get_audio_chunk()
@@ -40,7 +41,17 @@ def main():
             if audio_chunk is not None:
                 transcription = transcriber.process_chunk(audio_chunk)
                 if transcription:
-                    print("\n  Transcription:", transcription)
+                    # Append new words to the current line
+                    current_line += ' ' + transcription
+                    # Print the current line, overwriting previous output
+                    print("\r  Transcription:" + current_line, end='', flush=True)
+                    # Check for sentence-ending punctuation
+                    if any(punct in transcription for punct in '.!?'):
+                        print()  # Move to the next line
+                        current_line = ''
+                else:
+                    # If no transcription, continue
+                    pass
             
             time.sleep(0.01)  # Small delay to prevent CPU overuse
             

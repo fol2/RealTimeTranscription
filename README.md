@@ -44,6 +44,11 @@ A Python-based real-time audio transcription system that captures system audio v
    pip install -r requirements.txt
    ```
 
+4. Install spaCy English model:
+   ```bash
+   python -m spacy download en_core_web_sm
+   ```
+
 ## Configuration
 
 ### Audio Setup
