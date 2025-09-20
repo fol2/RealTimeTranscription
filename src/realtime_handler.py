@@ -89,24 +89,27 @@ class RealTimeTranscriptionHandler:
                     else:
                         self.partial_word = word
                 
-        # Build current sentence
+        # Build the current sentence
         if processed_words:
-            if not self.current_sentence:
-                self.current_sentence = " ".join(processed_words)
+            combined_text = ' '.join(processed_words)
+            if self.current_sentence:
+                self.current_sentence = f"{self.current_sentence} {combined_text}".strip()
             else:
-                # Try to combine with current sentence
-                combined = f"{self.current_sentence} {' '.join(processed_words)}"
-                doc = self.nlp(combined)
-                sentences = list(doc.sents)
-                
-                if len(sentences) <= 1:
-                    self.current_sentence = combined
-                else:
-                    # We have a complete sentence
-                    completed = str(sentences[0])
-                    self.current_sentence = " ".join(str(sent) for sent in sentences[1:])
-                    return completed, True
-        
+                self.current_sentence = combined_text
+
+            # Use spaCy to detect sentences
+            doc = self.nlp(self.current_sentence)
+            sentences = list(doc.sents)
+
+            if sentences:
+                # Check if there's at least one complete sentence
+                completed_sentences = [sent.text.strip() for sent in sentences[:-1]]
+                self.current_sentence = sentences[-1].text.strip()
+
+                if completed_sentences:
+                    completed_text = ' '.join(completed_sentences)
+                    return completed_text, True
+
         return self.current_sentence, False
 
     def reset(self):
@@ -114,4 +117,3 @@ class RealTimeTranscriptionHandler:
         self.current_sentence = ""
         self.word_buffer = []
         self.partial_word = ""
-        

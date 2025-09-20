@@ -4,10 +4,12 @@ import re
 import logging
 import time
 import queue
+import difflib
 from typing import List, Optional
 from datetime import datetime
 from .text_processing import TranscriptionResult
 from .config_manager import ConfigManager
+import threading
 
 logger = logging.getLogger(__name__)
 transcription_logger = logging.getLogger('transcription')
@@ -17,7 +19,10 @@ class TranscriptionWorker:
     def __init__(self, pipeline):
         self.pipeline = pipeline
         self.config = ConfigManager().get_pipeline_worker_config()
-        
+        self.current_line_text = ""  # Add this line
+        self.previous_text = ""  # Initialize previous transcription
+        self.lock = threading.Lock()  # Add this line
+
     def run(self):
         """Main transcription worker loop"""
         while self.pipeline.running:
@@ -36,24 +41,20 @@ class TranscriptionWorker:
                                 current_text, is_complete = self.pipeline.transcription_handler.update_transcription(text)
                                 
                                 if current_text:
-                                    # Create log record
-                                    record = logging.LogRecord(
-                                        name='transcription',
-                                        level=logging.INFO,
-                                        pathname='',
-                                        lineno=0,
-                                        msg=current_text,
-                                        args=(),
-                                        exc_info=None
-                                    )
-                                    
-                                    # Update display
-                                    transcription_logger.handle(record)
-                                    
-                                    # If sentence is complete, move to next line and log
-                                    if is_complete:
-                                        print()  # Move to next line
-                                        self._log_transcription(current_text)
+                                    new_words = self._get_new_words(self.previous_text, current_text)
+                                    if new_words:
+                                        # Create log record with only the new words
+                                        record = logging.LogRecord(
+                                            name='transcription',
+                                            level=logging.INFO,
+                                            pathname='',
+                                            lineno=0,
+                                            msg=new_words,
+                                            args=(),
+                                            exc_info=None
+                                        )
+                                        transcription_logger.handle(record)
+                                    self._update_previous_text(current_text)  # Update previous_text
                                 
                         except Exception as e:
                             logger.error(f"Transcription error: {str(e)}")
@@ -122,6 +123,39 @@ class TranscriptionWorker:
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 f.write(f"[{timestamp}] {text}\n")
 
+    def _get_new_words(self, old_text, new_text):
+        """Extract new words added to the transcription."""
+        old_words = old_text.strip().split()
+        new_words = new_text.strip().split()
+
+        # Reverse the word lists to compare from the end
+        index = 0
+        while (index < len(old_words) and index < len(new_words) and
+               old_words[-(index + 1)] == new_words[-(index + 1)]):
+            index += 1
+
+        # New words are from start to len(new_words) - index
+        new_words = ' '.join(new_words[:len(new_words) - index]).strip()
+
+        # If no new words are found, return an empty string
+        return new_words
+        # Implement the logic to process the text buffer if needed.
+        # If not required, you can leave it as a pass.
+        pass
+
+    def _update_previous_text(self, new_text):
+        with self.lock:
+            self.previous_text = new_text
+
+class TextProcessingWorker:
+    """Handles text processing in a separate thread"""
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
+        """Process the accumulated text buffer."""
+        # Implement the logic to process the text buffer if needed.
+        # If not required, you can leave it as a pass.
+        pass
+
 class TextProcessingWorker:
     """Handles text processing in a separate thread"""
     def __init__(self, pipeline):
@@ -158,7 +192,9 @@ class TextProcessingWorker:
                 logger.error(f"Error in text processing: {e}")
                 logger.exception("Full traceback:")
                 self.text_buffer = []
-
+        self.pipeline._process_buffer(self.text_buffer)
     def _process_buffer(self):
-        """Process the accumulated text buffer"""
-        self.pipeline._process_buffer(self.text_buffer) 
+        """Process the accumulated text buffer."""
+        # Implement the logic to process the text buffer if needed.
+        # If not required, you can leave it as a pass.
+        self.pipeline._process_buffer(self.text_buffer)

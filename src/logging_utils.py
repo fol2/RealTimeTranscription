@@ -5,9 +5,11 @@ import sys
 from datetime import datetime
 import colorama
 from colorama import Fore, Style
+import spacy
 
 # Initialize colorama for cross-platform color support
 colorama.init()
+nlp = spacy.load('en_core_web_sm')
 
 class ColoredFormatter(logging.Formatter):
     """Simplified formatter for system messages"""
@@ -23,19 +25,49 @@ class ColoredFormatter(logging.Formatter):
         return record.msg
 
 class TranscriptionFormatter(logging.Formatter):
-    """Minimal formatter showing only transcribed text with proper line handling"""
+    """Formatter that updates the console output in place and handles sentence completion."""
     def __init__(self):
         super().__init__()
-        self.last_length = 0
-        self.current_line = ""
-        
+        self.current_sentence = ""
+
     def format(self, record):
+        new_words = record.msg.strip()
+        if not new_words:
+            return ''  # No new words to process
+
+        # Ensure no duplication occurs
+        if self.current_sentence.endswith(new_words):
+            return ''  # Skip appending to prevent duplication
+
+        self.current_sentence = f"{self.current_sentence} {new_words}".strip()
+
+        # Use spaCy to detect sentence boundaries
+        doc = nlp(self.current_sentence)
+        sentences = list(doc.sents)
+
+        is_complete = False
+        if sentences:
+            last_sentence = sentences[-1]
+            # Check if the last token is punctuation
+            if last_sentence[-1].is_punct:
+                is_complete = True
+
         if hasattr(sys.stdout, 'isatty') and sys.stdout.isatty():
-            text = record.msg
-            padding = ' ' * max(self.last_length - len(text), 0)
-            self.last_length = len(text)
-            return f"\033[2K\r{Fore.BLUE}▶ {Style.RESET_ALL}{text}{padding}"
-        return record.msg
+            # Clear the current line
+            sys.stdout.write('\033[2K\r')
+            # Update the console output
+            sys.stdout.write(f"{Fore.BLUE}▶ {Style.RESET_ALL}{self.current_sentence}")
+            sys.stdout.flush()
+
+            if is_complete:
+                # Move to next line and reset current sentence
+                sys.stdout.write('\n')
+                sys.stdout.flush()
+                self.current_sentence = ""  # Reset for the next sentence
+
+            return ''  # Output already handled
+        else:
+            return self.current_sentence
 
 class TranscriptionFileFormatter(logging.Formatter):
     """Clean formatter for log files"""
@@ -105,4 +137,4 @@ def setup_logging():
 
 # Get loggers
 logger = logging.getLogger(__name__)
-transcription_logger = logging.getLogger('transcription') 
+transcription_logger = logging.getLogger('transcription')
